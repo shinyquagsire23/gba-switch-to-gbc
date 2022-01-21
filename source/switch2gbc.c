@@ -8,6 +8,11 @@
 
 #define ALWAYS_INLINE __attribute__((always_inline)) static inline
 
+extern const long int cgb_agb_boot_bin_size;
+extern const unsigned char cgb_agb_boot_bin[2304];
+
+extern void RAM_stub(void);
+
 ALWAYS_INLINE void SWI_Halt(void)
 {
     asm volatile(
@@ -75,7 +80,7 @@ IWRAM_CODE void prepare_registers(void)
 
     int i;
     for (i = 0; i < 0x18000 / 4; i ++) // Fill VRAM with 0xFF
-        ((u32*)VRAM)[i] = 0xFFFFFFFF;
+        ((u32*)VRAM)[i] = 0xCFCFCFCF;
 
     BG_PALETTE[0] = 0x0000;
     BG_PALETTE[1] = 0x7FFF;
@@ -86,11 +91,19 @@ IWRAM_CODE void prepare_registers(void)
 
     REG_SOUNDCNT_H = 0x88C2;
     REG_SOUNDBIAS = 0xC200; // 6 bit, 262.144kHz
+    
+    ((u32*)VRAM)[0] = 0xCFCFCFCF;
+    
+    //*(vu32*)0x4000800 = 0xFEFFFFF8;
+    
+    //*(vu32*)0x4000800 = 0x0E0000F8;
 }
 
 IWRAM_CODE void switch2gbc(void)
 {
     REG_IME = 0;
+    
+    //*(vu32*)0x4000800 = 0x0D000028 | 2;
 
     // Write 0x0408 to DISPCNT = 0x0408: Mode 0, GBC mode enabled, BG2 enabled
     GBC_DISPCNT_VALUE = 0x0408;
@@ -98,36 +111,296 @@ IWRAM_CODE void switch2gbc(void)
     // GBC mode bit can only be modified from BIOS, like from inside CpuSet()
     // Copy 1 halfword, 16 bit mode
     SWI_CpuSet(&GBC_DISPCNT_VALUE, (void *)(REG_BASE + 0), 1);
+    
+    //memset(0x02000000, 0xff, 0x100);
+    
+    //*(vu32*)0x4000800 = 0x0D000020 | 1; // jump to bootrom overlay thing
+    
+    uint32_t hival = (3 << 5) | (2 << 7) | (1 << 9) | (0 << 10) | (0 << 12) | (1 << 15);
+    
+    REG_DMA3SAD = 0x06010000;
+    REG_DMA3DAD = 0x06000000;
+    REG_DMA3CNT = 0x1000 | (hival << 16);
+    
+    // Normal boot, black screen with jingle
+    //*(vu32*)0x4000800 = 0x0D000000 | 0 | 2 | 4 | 0 | 0x10 | 0x20;
+    //SWI_Halt();
+
+    // BIOS swapped boot, white screen  no jingle
+    //*(vu32*)0x4000800 = 0x0D000000 | 0 | 2 | 4 | 8 | 0x10 | 0x20;
+    //SWI_Halt();
+
+    //void (*jump_fn)(void) = (void*)0x06010000;
+    //void (*jump_fn)(void) = (void*)0x03000000;
+    //jump_fn();
+
+    //REG_IME = 1;
+
+    // VRAM sets up registers, then jumps to 0x0 (actually 0x03000000) to trigger GBC mode
+    asm volatile(
+        
+        "ldr r0, =0x06010000\n"
+        "mov lr, r0\n"
+        //"ldr r0, =0x03000010\n"
+        "bx r0"
+    );
 
     // It seems that the GBC mode begins when HALTCNT is written.
-    SWI_Halt();
+    
+    *(uint8_t*)0x4000301 = 0x00;
 
     // Never reached in hardware. Trap emulators.
-    while (1);
+    while (1)
+    {
+        *(uint8_t*)0x4000301 = 0x00;
+        //SWI_Halt();
+    }
+}
+
+IWRAM_CODE void simpleirq(void)
+{
+    REG_IME = 0;
+    REG_IF = 0xFFFF;
+    REG_IME = 1;
 }
 
 IWRAM_CODE void delayed_switch2gbc(void)
 {
-    consoleDemoInit();
+    /*consoleDemoInit();
     iprintf("Swap cartridges now!\n");
     iprintf("\n");
-    iprintf("Waiting 10 seconds...\n");
+    iprintf("Waiting 10 seconds...\n");*/
+    
+    //memcpy((void*)0x02000000, cgb_agb_boot_bin, cgb_agb_boot_bin_size);
 
-    irqEnable(IRQ_TIMER0);
+//*(uint32_t*)0x02000000 = 0xEAFFFFFE;
+    //*(uint32_t*)0x02000004 = 0xEAFFFFFE;
+    //*(uint32_t*)0x02000008 = 0xEAFFFFFE;
+    //*(uint32_t*)0x0200000C = 0xEAFFFFFE;
+
+#if 0 
+    *(uint32_t*)0x02000000 = 0x0;
+    *(uint32_t*)0x02000004 = 0x0;
+    *(uint32_t*)0x02000008 = 0x0;
+    *(uint32_t*)0x0200000C = 0xE3A00004;
+    *(uint32_t*)0x02000010 = 0xE1A00C00;
+    *(uint32_t*)0x02000014 = 0xE2800C03;
+    
+    *(uint32_t*)0x02000018 = 0xE3A01000;
+    *(uint32_t*)0x0200001C = 0xE5C01001;
+    
+    *(uint32_t*)0x02000020 = 0xE3A00006;
+    *(uint32_t*)0x02000024 = 0xE1A00C00;
+    
+    *(uint32_t*)0x02000028 = 0xe3a01000;
+    *(uint32_t*)0x0200002C = 0xe7801001;
+    *(uint32_t*)0x02000030 = 0xe2811004;
+    *(uint32_t*)0x02000034 = 0xe3510801;
+    *(uint32_t*)0x02000038 = 0xeafffffb;
+    
+    *(uint32_t*)0x0200003C = 0xEAFFFFFE;
+#endif
+
+    uint32_t* out = (uint32_t*)0x02000000;
+
+    *out = 0x0; out++;
+    *out = 0x0; out++;
+    *out = 0x0; out++;
+    *out = 0x0; out++;
+    *out = 0x0; out++;
+    *out = 0x0; out++;
+    *out = 0x0; out++;
+    *out = 0x0; out++;
+    //*out = 0xEAFFFFFE; out++;
+    *out = 0xe12fff1e; out++;
+    *out = 0xe5c88001; out++;
+    *out = 0xe12fff1e; out++;
+    
+    
+#if 0
+    *(uint32_t*)0x03000000 = 0x0;
+    *(uint32_t*)0x03000004 = 0x0;
+    *(uint32_t*)0x03000008 = 0x0;
+    *(uint32_t*)0x0300000C = 0xE3A00004;
+    *(uint32_t*)0x03000010 = 0xE1A00C00;
+    *(uint32_t*)0x03000014 = 0xE2800C03;
+    
+    *(uint32_t*)0x03000018 = 0xE3A01000;
+    *(uint32_t*)0x0300001C = 0xE5C01001;
+    
+    //*(uint32_t*)0x03000020 = 0xEAFFFFF9;
+    //*(uint32_t*)0x03000020 = 0xE3A00006;
+    *(uint32_t*)0x03000024 = 0xE1A00C00;
+    
+    *(uint32_t*)0x03000028 = 0xe3a01000;
+    *(uint32_t*)0x0300002C = 0xe7801001;
+    *(uint32_t*)0x03000030 = 0xe2811004;
+    *(uint32_t*)0x03000034 = 0xe3510801;
+    *(uint32_t*)0x03000038 = 0xeafffffb;
+    
+    *(uint32_t*)0x0300003C = 0xEAFFFFFE;
+#endif
+
+    out = (uint32_t*)0x03000000;
+
+    
+
+    //memcpy(out, (void*)((intptr_t)&RAM_stub & ~1), 0x80);
+
+#if 0
+    *out = 0x0; out++;
+    *out = 0x0; out++;
+    *out = 0x0; out++;
+    *out = 0x0; out++;
+    *out = 0xe59F0000; out++;
+    *out = 0xe12fff10; out++;
+    *out = 0x06010000; out++;
+#endif
+
+    *out = 0x0; out++;
+    *out = 0x0; out++;
+    *out = 0x0; out++;
+    *out = 0x0; out++;
+    *out = 0xe12fff1e; out++;
+    *out = 0xe5c88001; out++;
+    *out = 0xe12fff1e; out++;
+    
+#if 0
+    *out = 0xFF00FF00; out++;
+    *out = 0x0; out++;
+    *out = 0x0; out++;
+    *out = 0x0; out++;
+
+    *out = 0xe3a00406; out++;
+    *out = 0xe3a01000; out++;
+    *out = 0xe3a03301; out++;
+    *out = 0xe2833c03; out++;
+    *out = 0xe7801001; out++;
+    //*out = 0x0; out++;
+    *out = 0xe2811004; out++;
+    *out = 0xe3510801; out++;
+    *out = 0x1a000000; out++;
+    *out = 0xe3a01000; out++;
+    *out = 0xe5c33001; out++;
+    *out = 0xeafffff8; out++;
+#endif
+
+    out = (uint32_t*)0x06010000;
+
+    //*out = 0xFF00FF00; out++;
+    //*out = 0x0; out++;
+    //*out = 0x0; out++;
+    //*out = 0x0; out++;
+    
+    /**out = 0xe3a00406; out++;
+    *out = 0xe3a01000; out++;
+    *out = 0xe3a03301; out++;
+    *out = 0xe2833c03; out++;
+    //*out = 0xe7801001; out++;
+    *out = 0x0; out++;
+    *out = 0xe2811004; out++;
+    *out = 0xe3510801; out++;
+    *out = 0x1a000000; out++;
+    *out = 0xe3a01000; out++;
+    *out = 0xe5c33001; out++;
+    *out = 0xeafffff8; out++;*/
+
+    memcpy(out, (void*)((intptr_t)&RAM_stub & ~1), 0x100);
+
+    //irqEnable(IRQ_TIMER0);
+
+    REG_KEYCNT = (1 << 14) | (1 << 9) | (1 << 8);
+    irqEnable(IRQ_KEYPAD);
 
     // Clocks per second = 16777216 = 16 * 1024 * 1024
     // With 1024 prescaler = 16 * 1024 for one second
 
-    uint16_t ticks_per_second = 16 * 1024;
+    uint16_t ticks_per_second = 16 * 1024 * 10;
 
-    REG_TM0CNT_L = UINT16_MAX - ticks_per_second;
-    REG_TM0CNT_H = TIMER_START | TIMER_IRQ | 3;
+    //REG_TM0CNT_L = UINT16_MAX - ticks_per_second;
+    //REG_TM0CNT_H = TIMER_START | TIMER_IRQ | 3;
 
-    for (int i = 0; i < 10; i++)
-        SWI_Halt();
+    //for (int i = 0; i < 10 * 1024; i++)
+    //    SWI_Halt();
+    while ((REG_KEYINPUT & (1 << 8)));
 
     BG_PALETTE[0] = 0x0000;
     BG_PALETTE[1] = 0x7FFF;
+    
+    
+    
+    
+    
+    //\x04\x00\xa0\xe3
+    //\x00\x0c\xa0\xe1
+    //\x03\x0c\x80\xe2
+    //\x01\x00\xc0\xe5
+    
+    //memset(0x02000000, 0xCF, 0x10);
+    //memset(0x03000000, 0xCF, 0xA);
+    
+    //uint16_t ticks_per_second = 16 * 1024;
+
+    //REG_TM0CNT_L = UINT16_MAX - ticks_per_second;
+    //REG_TM0CNT_H = TIMER_START | TIMER_IRQ | 3;
+
+    *(uint32_t*)0x03007FFC = 0x06010000 + (14*4);
 
     switch2gbc();
+}
+
+__attribute__((naked)) void RAM_stub(void)
+{
+    asm volatile(
+        ".arm\n"
+        "nop\n"
+        "nop\n"
+        "nop\n"
+        "nop\n"
+        "ldr r8, =0x04000300\n"
+        "ldr r0, =0x4000800\n"
+        "ldr r1, =(0x0D000000 | 0x20 | 1)\n"
+        "str r1, [r0]\n"
+        "ldr  r0, =0x6000000\n"
+        "ldr  r1, =0x4000\n"
+        "ldr r4, =0xFFFF\n"
+        "ldr r5, =0x10000\n"
+        "mov lr, pc\n"
+        "mov r6, #0x20\n"
+        "loop:\n"
+        "str  r6, [r0, r1]\n"
+        "add  r1, r1, #4\n"
+        "cmp  r1, r5\n"
+        "bne  skip\n"
+        "mov  r1, #0\n"
+        "skip:\n"
+        "add r6, #0x1\n"
+        "ldr  r3, =0x4000000\n"
+        "lsl r2, r6, #0xA\n"
+        "strh r2, [r3, #0x28]\n"
+        "add  r3, r3, #0x80\n"
+        "add  r3, r3, #0x80\n"
+        "add  r3, r3, #0x80\n"
+        "add  r3, r3, #0x80\n"
+        "strh r4, [r3, #0x2]\n"
+        //"mov r2, #0x1\n"
+        //"str r2, [r3, #0x8]\n"
+        "ldr  r3, =0x4000000\n"
+        "ldr  r0, =0x06000000\n"
+        "str r0, [r3, #0xD8]\n"
+        "ldr r2, =0x08000000\n"
+        "str r2, [r3, #0xD4]\n"
+        "ldr r2, =(0x1000 | (((3 << 5) | (3 << 7) | (0 << 9) | (0 << 10) | (0 << 12) | (1 << 15)) << 16))\n"
+        "str r2, [r3, #0xDC]\n"
+        "ldr r2, =0x04000208\n"
+        "mov r3, #0x1\n"
+        "strb r3, [r2]\n"
+        "mov r2, #0x24\n"
+        "bx r2\n"
+        //"swi #0x2\n"
+        //"strb r3, [r3, #1]\n"
+        
+        "bx lr\n"
+        "b loop\n"
+    );
 }

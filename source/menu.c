@@ -294,6 +294,10 @@ int main(void)
 
     enter_menu();
 
+    update_affine_registers();
+    update_mosaic();
+    load_menu();
+
     // Reset all registers to the values expected when switching to GBC mode
 
     prepare_registers();
