@@ -120,7 +120,7 @@ IWRAM_CODE void switch2gbc(void)
     
     REG_DMA3SAD = 0x06010000;
     REG_DMA3DAD = 0x06000000;
-    REG_DMA3CNT = 0x1000 | (hival << 16);
+    //REG_DMA3CNT = 0x1000 | (hival << 16);
     
     // Normal boot, black screen with jingle
     //*(vu32*)0x4000800 = 0x0D000000 | 0 | 2 | 4 | 0 | 0x10 | 0x20;
@@ -166,6 +166,7 @@ IWRAM_CODE void simpleirq(void)
 
 IWRAM_CODE void delayed_switch2gbc(void)
 {
+    REG_IME = 0;
     /*consoleDemoInit();
     iprintf("Swap cartridges now!\n");
     iprintf("\n");
@@ -203,8 +204,8 @@ IWRAM_CODE void delayed_switch2gbc(void)
 
     uint32_t* out = (uint32_t*)0x02000000;
 
-    *out = 0x0; out++;
-    *out = 0x0; out++;
+    *out = 0; out++;
+    *out = 0; out++;
     *out = 0x0; out++;
     *out = 0x0; out++;
     *out = 0x0; out++;
@@ -212,7 +213,12 @@ IWRAM_CODE void delayed_switch2gbc(void)
     *out = 0x0; out++;
     *out = 0x0; out++;
     //*out = 0xEAFFFFFE; out++;
-    *out = 0xe12fff1e; out++;
+    //*out = 0xe12fff1e; out++;
+    //*out = 0xe25ef004; out++;
+    *out = 0xe59F0000; out++;
+    *out = 0xe12fff10; out++;
+    *out = 0x06010000; out++;
+
     *out = 0xe5c88001; out++;
     *out = 0xe12fff1e; out++;
     
@@ -257,13 +263,28 @@ IWRAM_CODE void delayed_switch2gbc(void)
     *out = 0x06010000; out++;
 #endif
 
+    *out = 0; out++;
+    *out = 0; out++;
     *out = 0x0; out++;
     *out = 0x0; out++;
     *out = 0x0; out++;
     *out = 0x0; out++;
-    *out = 0xe12fff1e; out++;
+    *out = 0x0; out++;
+    *out = 0x0; out++;
+    //*out = 0xEAFFFFFE; out++;
+    //*out = 0xe12fff1e; out++;
+    //*out = 0xe25ef004; out++;
+    *out = 0xe59F0000; out++;
+    *out = 0xe12fff10; out++;
+    *out = 0x06010000; out++;
+
+    *out = 0xe59f200c; out++;
+    *out = 0xe59f300c; out++;
+    *out = 0xe5823000; out++;
     *out = 0xe5c88001; out++;
     *out = 0xe12fff1e; out++;
+    *out = 0x04000800; out++;
+    *out = 0xffffffdf; out++;
     
 #if 0
     *out = 0xFF00FF00; out++;
@@ -283,6 +304,22 @@ IWRAM_CODE void delayed_switch2gbc(void)
     *out = 0xe3a01000; out++;
     *out = 0xe5c33001; out++;
     *out = 0xeafffff8; out++;
+#endif
+
+    out = (uint32_t*)0x02020000;
+
+    
+
+    //memcpy(out, (void*)((intptr_t)&RAM_stub & ~1), 0x80);
+
+#if 1
+    *out = 0x0; out++;
+    *out = 0x0; out++;
+    *out = 0x0; out++;
+    *out = 0x0; out++;
+    *out = 0xe59F0000; out++;
+    *out = 0xe12fff10; out++;
+    *out = 0x06010000; out++;
 #endif
 
     out = (uint32_t*)0x06010000;
@@ -309,9 +346,6 @@ IWRAM_CODE void delayed_switch2gbc(void)
 
     //irqEnable(IRQ_TIMER0);
 
-    REG_KEYCNT = (1 << 14) | (1 << 9) | (1 << 8);
-    irqEnable(IRQ_KEYPAD);
-
     // Clocks per second = 16777216 = 16 * 1024 * 1024
     // With 1024 prescaler = 16 * 1024 for one second
 
@@ -323,12 +357,20 @@ IWRAM_CODE void delayed_switch2gbc(void)
     //for (int i = 0; i < 10 * 1024; i++)
     //    SWI_Halt();
     while ((REG_KEYINPUT & (1 << 8)));
+    while (!(REG_KEYINPUT & (1 << 8)));
 
     BG_PALETTE[0] = 0x0000;
     BG_PALETTE[1] = 0x7FFF;
     
     
-    
+    REG_IME = 0;
+    REG_IE = 0;
+    REG_IF = 0xFFFF;
+
+    REG_KEYCNT = (1 << 14) | (1 << 9) | (1 << 8);
+    //irqEnable(IRQ_KEYPAD);
+    REG_IE |= IRQ_KEYPAD;
+    REG_IE |= IRQ_DMA3;
     
     
     //\x04\x00\xa0\xe3
@@ -357,9 +399,11 @@ __attribute__((naked)) void RAM_stub(void)
         "nop\n"
         "nop\n"
         "nop\n"
+        "MSR CPSR_c, #0xDF\n"
+        "ldr sp, =0x06018000\n"
         "ldr r8, =0x04000300\n"
         "ldr r0, =0x4000800\n"
-        "ldr r1, =(0x0D000000 | 0x20 | 1)\n"
+        "ldr r1, =(0xFFFF0000 | 1 | 2 | 4 | 0x10)\n"
         "str r1, [r0]\n"
         "ldr  r0, =0x6000000\n"
         "ldr  r1, =0x4000\n"
@@ -383,22 +427,20 @@ __attribute__((naked)) void RAM_stub(void)
         "add  r3, r3, #0x80\n"
         "add  r3, r3, #0x80\n"
         "strh r4, [r3, #0x2]\n"
-        //"mov r2, #0x1\n"
-        //"str r2, [r3, #0x8]\n"
         "ldr  r3, =0x4000000\n"
-        "ldr  r0, =0x06000000\n"
+        "ldr  r0, =0x06001000\n"
         "str r0, [r3, #0xD8]\n"
         "ldr r2, =0x08000000\n"
         "str r2, [r3, #0xD4]\n"
-        "ldr r2, =(0x1000 | (((3 << 5) | (3 << 7) | (0 << 9) | (0 << 10) | (0 << 12) | (1 << 15)) << 16))\n"
+        "ldr r2, =(0x1000 | (((3 << 5) | (2 << 7) | (0 << 9) | (1 << 10) | (0 << 12) | (1 << 14) | (1 << 15)) << 16))\n"
         "str r2, [r3, #0xDC]\n"
         "ldr r2, =0x04000208\n"
         "mov r3, #0x1\n"
         "strb r3, [r2]\n"
-        "mov r2, #0x24\n"
+        "mov r2, #0x2C\n"
         "bx r2\n"
         //"swi #0x2\n"
-        //"strb r3, [r3, #1]\n"
+        //"strb r8, [r8, #1]\n"
         
         "bx lr\n"
         "b loop\n"
