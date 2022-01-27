@@ -8,6 +8,10 @@
 
 #define ALWAYS_INLINE __attribute__((always_inline)) static inline
 
+const uint8_t gbc_payload[0x3B] = {0xAF, 0xE0, 0x40, 0x21, 0x10, 0x80, 0x0E, 0x80, 0x2A, 0xE2, 0x0C, 0x20, 0xFB, 0xC3, 0x80, 0xFF, 0x3E, 0x80, 0xE0, 0x40, 0x06, 0x0C, 0xAF, 0xE0, 0x0F, 0x3C, 0xE0, 0xFF, 0x18, 0x15, 0x05, 0x20, 0xF5, 0x3E, 0xFF, 0xE0, 0x24, 0xE0, 0x25, 0xE0, 0x26, 0x3E, 0x82, 0xE0, 0x12, 0xE0, 0x13, 0xE0, 0x14, 0x18, 0xE1, 0xF0, 0x0F, 0xE6, 0x01, 0x28, 0xFA, 0x18, 0xE3};
+
+extern void RAM_stub(void);
+
 ALWAYS_INLINE void SWI_Halt(void)
 {
     asm volatile(
@@ -73,10 +77,6 @@ IWRAM_CODE void prepare_registers(void)
 
     // Do BIOS configuration...
 
-    int i;
-    for (i = 0; i < 0x18000 / 4; i ++) // Fill VRAM with 0xFF
-        ((u32*)VRAM)[i] = 0xFFFFFFFF;
-
     BG_PALETTE[0] = 0x0000;
     BG_PALETTE[1] = 0x7FFF;
 
@@ -91,43 +91,49 @@ IWRAM_CODE void prepare_registers(void)
 IWRAM_CODE void switch2gbc(void)
 {
     REG_IME = 0;
-
+    
     // Write 0x0408 to DISPCNT = 0x0408: Mode 0, GBC mode enabled, BG2 enabled
     GBC_DISPCNT_VALUE = 0x0408;
 
     // GBC mode bit can only be modified from BIOS, like from inside CpuSet()
     // Copy 1 halfword, 16 bit mode
     SWI_CpuSet(&GBC_DISPCNT_VALUE, (void *)(REG_BASE + 0), 1);
+    
+    // Normal boot, black screen with jingle
+    //*(vu32*)0x4000800 = 0x0D000000 | 0x20;
+    //SWI_Halt();
 
-    // It seems that the GBC mode begins when HALTCNT is written.
+    // BIOS swapped boot, white screen  no jingle
+    *(vu32*)0x4000800 = 0x0D000000 | 0x20 | 8;
     SWI_Halt();
+}
 
-    // Never reached in hardware. Trap emulators.
-    while (1);
+IWRAM_CODE void simpleirq(void)
+{
+    REG_IME = 0;
+    REG_IF = 0xFFFF;
+    REG_IME = 1;
 }
 
 IWRAM_CODE void delayed_switch2gbc(void)
 {
-    consoleDemoInit();
-    iprintf("Swap cartridges now!\n");
-    iprintf("\n");
-    iprintf("Waiting 10 seconds...\n");
+    REG_IME = 0;
 
-    irqEnable(IRQ_TIMER0);
-
-    // Clocks per second = 16777216 = 16 * 1024 * 1024
-    // With 1024 prescaler = 16 * 1024 for one second
-
-    uint16_t ticks_per_second = 16 * 1024;
-
-    REG_TM0CNT_L = UINT16_MAX - ticks_per_second;
-    REG_TM0CNT_H = TIMER_START | TIMER_IRQ | 3;
-
-    for (int i = 0; i < 10; i++)
-        SWI_Halt();
+    // Write payload to IWRAM
+    uint8_t* iwram_8 = (uint32_t*)0x03000000;
+    memset(iwram_8, 0, 0x3B*4);
+    for (int i = 0; i < 0x3B; i++)
+    {
+        iwram_8[i * 4] = gbc_payload[i];
+    }
 
     BG_PALETTE[0] = 0x0000;
     BG_PALETTE[1] = 0x7FFF;
+    
+    
+    REG_IME = 0;
+    REG_IE = 0;
+    REG_IF = 0xFFFF;
 
     switch2gbc();
 }
