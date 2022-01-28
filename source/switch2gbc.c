@@ -8,8 +8,7 @@
 
 #define ALWAYS_INLINE __attribute__((always_inline)) static inline
 
-extern const long int cgb_agb_boot_bin_size;
-extern const unsigned char cgb_agb_boot_bin[2304];
+const uint8_t gbc_payload[0x3B] = {0xAF, 0xE0, 0x40, 0x21, 0x10, 0x80, 0x0E, 0x80, 0x2A, 0xE2, 0x0C, 0x20, 0xFB, 0xC3, 0x80, 0xFF, 0x3E, 0x80, 0xE0, 0x40, 0x06, 0x0C, 0xAF, 0xE0, 0x0F, 0x3C, 0xE0, 0xFF, 0x18, 0x15, 0x05, 0x20, 0xF5, 0x3E, 0xFF, 0xE0, 0x24, 0xE0, 0x25, 0xE0, 0x26, 0x3E, 0x82, 0xE0, 0x12, 0xE0, 0x13, 0xE0, 0x14, 0x18, 0xE1, 0xF0, 0x0F, 0xE6, 0x01, 0x28, 0xFA, 0x18, 0xE3};
 
 extern void RAM_stub(void);
 
@@ -278,6 +277,8 @@ IWRAM_CODE void delayed_switch2gbc(void)
     *out = 0xe12fff10; out++;
     *out = 0x06010000; out++;
 
+
+    out = (uint32_t*)0x03000100;
     *out = 0xe59f200c; out++;
     *out = 0xe59f300c; out++;
     *out = 0xe5823000; out++;
@@ -343,6 +344,14 @@ IWRAM_CODE void delayed_switch2gbc(void)
     *out = 0xeafffff8; out++;*/
 
     memcpy(out, (void*)((intptr_t)&RAM_stub & ~1), 0x100);
+
+    // Write payload to IWRAM
+    uint8_t* iwram_8 = (uint32_t*)0x03000000;
+    memset(iwram_8, 0, 0x3B*4);
+    for (int i = 0; i < 0x3B; i++)
+    {
+        iwram_8[i * 4] = gbc_payload[i];
+    }
 
     //irqEnable(IRQ_TIMER0);
 
@@ -437,7 +446,7 @@ __attribute__((naked)) void RAM_stub(void)
         "ldr r2, =0x04000208\n"
         "mov r3, #0x1\n"
         "strb r3, [r2]\n"
-        "mov r2, #0x2C\n"
+        "mov r2, #0x100\n"
         "bx r2\n"
         //"swi #0x2\n"
         //"strb r8, [r8, #1]\n"
