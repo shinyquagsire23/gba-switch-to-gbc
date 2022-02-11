@@ -7,7 +7,33 @@ ifeq ($(strip $(DEVKITARM)),)
 $(error "Please set DEVKITARM in your environment. export DEVKITARM=<path to>devkitARM)
 endif
 
-include $(DEVKITARM)/gba_rules
+# BEGIN RULES
+
+include $(DEVKITARM)/base_rules
+
+BASEDIR := $(CURDIR)/../
+PORTLIBS	:=	$(PORTLIBS_PATH)/gba $(PORTLIBS_PATH)/armv4
+
+LIBGBA	:=	$(DEVKITPRO)/libgba
+
+#---------------------------------------------------------------------------------
+%.gba: %.elf
+	$(SILENTCMD)$(OBJCOPY) -O binary $< $@
+	@echo built ... $(notdir $@)
+	$(SILENTCMD)gbafix $@
+
+#---------------------------------------------------------------------------------
+%_mb.elf:
+	$(SILENTMSG) linking multiboot
+	$(SILENTCMD)$(LD) -specs=$(BASEDIR)/gba_mb_custom.specs -Wl,-Map,mymap.map $(LDFLAGS) $(OFILES) $(LIBPATHS) $(LIBS) -o $@
+
+#---------------------------------------------------------------------------------
+%.elf:
+	$(SILENTMSG) linking cartridge
+	$(SILENTCMD)$(LD)  $(LDFLAGS) -specs=gba.specs -Map,mymap.map $(OFILES) $(LIBPATHS) $(LIBS) -o $@
+
+# END RULES
+
 
 #---------------------------------------------------------------------------------
 # TARGET is the name of the output, if this ends with _mb a multiboot image is generated

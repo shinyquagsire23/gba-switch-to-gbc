@@ -1,0 +1,43 @@
+INCLUDE "hw.inc"
+
+SECTION "Main", ROM0[$00]
+LOAD "Main Load", VRAM[$8000]
+_start::
+    xor  a
+    ldh  [$FF40],a      ; Disable LCD as early as possible
+    ld   hl,.hram_payload_start
+    ld   c,$80          ; Bottom of HRAM
+.copyloop
+    ldi  a,[hl]
+    ld   [$ff00+c],a
+    inc  c
+    jr   nz,.copyloop
+    jp   $FF80
+.hram_payload_start
+    ld   a,$80       
+    ldh  [$FF40],a      ; Enable LCD
+.restart
+    ld   b,$0C
+.nextframe
+    xor  a
+    ldh  [$FF0F],a      ; Clear interrupts
+    inc  a
+    ldh  [$FFFF],a      ; A=1, enable VBlank only
+.waitint
+    ldh  a,[$FF0F]
+    and  a,$01
+    jr   z,.waitint
+    dec  b
+    jr   nz,.nextframe
+    ld   a,$FF          ; Enable sound and route everywhere
+    ldh  [$FF24],a
+    ldh  [$FF25],a
+    ldh  [$FF26],a
+    ld   a,$82          ; Use $82 as envelope, lo freq and hi freq
+    ldh  [$FF12],a
+    ldh  [$FF13],a
+    ldh  [$FF14],a
+    jr   .restart
+
+
+ENDL

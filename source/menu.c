@@ -9,12 +9,13 @@
 
 #include "switch2gbc.h"
 
-#include "cgb_bootstrap.h"
+//#include "cgb_bootstrap.h"
 
 // --------------------------------------------------------------------
 
 #define PACKED __attribute__((packed))
 
+#if 0
 // Struct that holds the input to SWI_BgAffineSet()
 typedef struct PACKED {
     int32_t bgx;        // 24.8 fixed point
@@ -88,23 +89,6 @@ void update_affine_registers(void)
     refresh_affine_registers();
 }
 
-void load_callibration_bg(void)
-{
-    // Load data
-    memcpy(TILE_BASE_ADR(1), cgb_bootstrapTiles, cgb_bootstrapTilesLen);
-    memcpy(MAP_BASE_ADR(0), cgb_bootstrapMap, cgb_bootstrapMapLen);
-    memcpy(BG_PALETTE, cgb_bootstrapPal, cgb_bootstrapPalLen);
-
-    BG_PALETTE[16 * 15 + 1] = RGB5(0, 0, 31);
-
-    // Setup background
-    REG_BG2CNT = MAP_BASE(0) | TILE_BASE(1) | ROTBG_SIZE_32 | BG_MOSAIC;
-
-    update_affine_registers();
-
-    REG_DISPCNT = MODE_1 | BG0_ON | BG2_ON;
-}
-
 int mosx, mosy;
 
 void update_mosaic(void)
@@ -119,184 +103,27 @@ void reset_mosaic(void)
 
     update_mosaic();
 }
-
-// --------------------------------------------------------------------
-
-void enter_adjust_screen(void)
-{
-    scanKeys();
-
-    load_callibration_bg();
-
-    iprintf("\x1b[2J");
-    iprintf("PAD: Move\n");
-    iprintf("L/R: Rotate\n");
-    iprintf("SELECT/START: Scale\n");
-    iprintf("B: Exit\n");
-
-    while(1)
-    {
-        VBlankIntrWait();
-
-        update_affine_registers();
-        update_mosaic();
-
-        scanKeys();
-
-        uint16_t keys = keysHeld();
-
-        if (keys & KEY_UP)
-            aff_src.bgy += 1 << 8;
-        if (keys & KEY_DOWN)
-            aff_src.bgy -= 1 << 8;
-
-        if (keys & KEY_RIGHT)
-            aff_src.bgx -= 1 << 8;
-        if (keys & KEY_LEFT)
-            aff_src.bgx += 1 << 8;
-
-        if (keys & KEY_R)
-            aff_src.angle += 1 << 8;
-        if (keys & KEY_L)
-            aff_src.angle -= 1 << 8;
-
-        if (keys & KEY_SELECT)
-        {
-            if (aff_src.scalex > (1 << 4))
-                aff_src.scalex -= 1 << 4;
-            if (aff_src.scaley > (1 << 4))
-                aff_src.scaley -= 1 << 4;
-        }
-        if (keys & KEY_START)
-        {
-            if (aff_src.scalex < (1 << 10))
-                aff_src.scalex += 1 << 4;
-            if (aff_src.scaley < (1 << 10))
-                aff_src.scaley += 1 << 4;
-        }
-
-        if (keys & KEY_B)
-            break;
-    }
-
-    scanKeys();
-}
-
-void enter_mosaic_screen(void)
-{
-    scanKeys();
-
-    load_callibration_bg();
-
-    iprintf("\x1b[2J");
-    iprintf("PAD: Change mosaic\n");
-    iprintf("B: Exit\n");
-
-    while(1)
-    {
-        VBlankIntrWait();
-
-        update_affine_registers();
-        update_mosaic();
-
-        scanKeys();
-
-        uint16_t keys = keysDown();
-
-        if ((keys & KEY_UP) && (mosy < 15))
-            mosy++;
-        if ((keys & KEY_DOWN) && (mosy > 0))
-            mosy--;
-
-        if ((keys & KEY_RIGHT) && (mosx < 15))
-            mosx++;
-        if ((keys & KEY_LEFT) && (mosx > 0))
-            mosx--;
-
-        if (keys & KEY_B)
-            break;
-    }
-
-    scanKeys();
-}
-
-// --------------------------------------------------------------------
-
-int greenswap;
-
-void load_menu(void)
-{
-    iprintf("\x1b[2J");
-    REG_DISPCNT = MODE_0 | BG0_ON;
-
-    BG_PALETTE[0] = RGB5(0, 0, 0);
-    BG_PALETTE[16 * 15 + 1] = RGB5(0, 0, 31);
-}
-
-void enter_menu(void)
-{
-    load_menu();
-
-    while(1)
-    {
-        VBlankIntrWait();
-
-        iprintf("\x1b[0;0H");
-
-        iprintf("START: Enter GBC mode\n");
-        iprintf("\n");
-        iprintf("A: Adjust screen position\n");
-        iprintf("R: Adjust mosaic\n");
-        iprintf("\n");
-        iprintf("L: Enable GREENSWAP: %s\n", greenswap ? "ON " : "OFF");
-
-        scanKeys();
-
-        uint16_t keys = keysDown();
-
-        if (keys & KEY_A)
-        {
-            enter_adjust_screen();
-            load_menu();
-        }
-        if (keys & KEY_R)
-        {
-            enter_mosaic_screen();
-            load_menu();
-        }
-        if (keys & KEY_L)
-            greenswap ^= 1;
-
-        *((u16*)0x04000002) = greenswap;
-
-        if (keys & KEY_START)
-            break;
-    }
-
-    irqDisable(IRQ_VBLANK);
-
-    iprintf("\x1b[2J");
-}
+#endif
 
 // --------------------------------------------------------------------
 
 int main(void)
 {
-    irqInit();
-    irqEnable(IRQ_VBLANK);
+    //irqInit();
+    INT_VECTOR = IntrMain;
 
-    consoleDemoInit();
+    //consoleDemoInit();
 
-    reset_affine_registers();
-    reset_mosaic();
+    //reset_affine_registers();
+    //reset_mosaic();
 
     // User configuration menu
 
-    enter_menu();
+    //enter_menu();
 
-    update_affine_registers();
-    update_mosaic();
-    load_menu();
+    //update_affine_registers();
+    //update_mosaic();
+    //load_menu();
 
     // Reset all registers to the values expected when switching to GBC mode
 
@@ -308,11 +135,11 @@ int main(void)
     // affine transformation is ignored.  When pressing R again, the affine
     // transformation is applied again.
 
-    refresh_affine_registers();
-    update_mosaic();
-    *((u16*)0x04000002) = greenswap;
+    //refresh_affine_registers();
+    //update_mosaic();
+    //*((u16*)0x04000002) = greenswap;
 
-    REG_BG2CNT |= BG_MOSAIC;
+    //REG_BG2CNT |= BG_MOSAIC;
 
     // Actually switch
 

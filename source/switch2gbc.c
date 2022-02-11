@@ -7,8 +7,13 @@
 #include <gba.h>
 
 #define ALWAYS_INLINE __attribute__((always_inline)) static inline
+#define REG_POSTFLG (*(vu8*)0x04000300)
+#define REG_HALTCNT (*(vu8*)0x04000301)
 
-const uint8_t gbc_payload[0x3B] = {0xAF, 0xE0, 0x40, 0x21, 0x10, 0x80, 0x0E, 0x80, 0x2A, 0xE2, 0x0C, 0x20, 0xFB, 0xC3, 0x80, 0xFF, 0x3E, 0x80, 0xE0, 0x40, 0x06, 0x0C, 0xAF, 0xE0, 0x0F, 0x3C, 0xE0, 0xFF, 0x18, 0x15, 0x05, 0x20, 0xF5, 0x3E, 0xFF, 0xE0, 0x24, 0xE0, 0x25, 0xE0, 0x26, 0x3E, 0x82, 0xE0, 0x12, 0xE0, 0x13, 0xE0, 0x14, 0x18, 0xE1, 0xF0, 0x0F, 0xE6, 0x01, 0x28, 0xFA, 0x18, 0xE3};
+//const uint8_t gbc_payload[0x3B] = {0xAF, 0xE0, 0x40, 0x21, 0x10, 0x80, 0x0E, 0x80, 0x2A, 0xE2, 0x0C, 0x20, 0xFB, 0xC3, 0x80, 0xFF, 0x3E, 0x80, 0xE0, 0x40, 0x06, 0x0C, 0xAF, 0xE0, 0x0F, 0x3C, 0xE0, 0xFF, 0x18, 0x15, 0x05, 0x20, 0xF5, 0x3E, 0xFF, 0xE0, 0x24, 0xE0, 0x25, 0xE0, 0x26, 0x3E, 0x82, 0xE0, 0x12, 0xE0, 0x13, 0xE0, 0x14, 0x18, 0xE1, 0xF0, 0x0F, 0xE6, 0x01, 0x28, 0xFA, 0x18, 0xE3};
+
+extern const uint8_t gbc_payload[];
+extern const int gbc_payload_length;
 
 extern void RAM_stub(void);
 
@@ -33,10 +38,7 @@ ALWAYS_INLINE void SWI_CpuSet(const void *src, void *dst, uint32_t len_mode)
     );
 }
 
-// BSS is by default in IWRAM
-uint16_t GBC_DISPCNT_VALUE;
-
-IWRAM_CODE void prepare_registers(void)
+void prepare_registers(void)
 {
     // Reset all I/O to default values
 
@@ -77,9 +79,9 @@ IWRAM_CODE void prepare_registers(void)
 
     // Do BIOS configuration...
 
-    int i;
-    for (i = 0; i < 0x18000 / 4; i ++) // Fill VRAM with 0xFF
-        ((u32*)VRAM)[i] = 0xCFCFCFCF;
+    //int i;
+    //for (i = 0; i < 0x18000 / 4; i ++) // Fill VRAM with 0xFF
+    //    ((u32*)VRAM)[i] = 0xCFCFCFCF;
 
     BG_PALETTE[0] = 0x0000;
     BG_PALETTE[1] = 0x7FFF;
@@ -91,81 +93,48 @@ IWRAM_CODE void prepare_registers(void)
     REG_SOUNDCNT_H = 0x88C2;
     REG_SOUNDBIAS = 0xC200; // 6 bit, 262.144kHz
     
-    ((u32*)VRAM)[0] = 0xCFCFCFCF;
+    //((u32*)VRAM)[0] = 0xCFCFCFCF;
     
     //*(vu32*)0x4000800 = 0xFEFFFFF8;
     
     //*(vu32*)0x4000800 = 0x0E0000F8;
 }
 
-IWRAM_CODE void switch2gbc(void)
+IWRAM_CODE void do_halt(void)
+{
+    REG_DISPCNT = 0x0408;
+    REG_POSTFLG = 1;
+    REG_HALTCNT = 0;
+    while (1)
+    {
+        //REG_DISPCNT |= 0x80;
+        //REG_DISPCNT &= ~0x80;
+    }
+}
+
+void switch2gbc(void)
 {
     REG_IME = 0;
     
-    //*(vu32*)0x4000800 = 0x0D000028 | 2;
-
-    // Write 0x0408 to DISPCNT = 0x0408: Mode 0, GBC mode enabled, BG2 enabled
-    GBC_DISPCNT_VALUE = 0x0408;
-
-    // GBC mode bit can only be modified from BIOS, like from inside CpuSet()
-    // Copy 1 halfword, 16 bit mode
-    SWI_CpuSet(&GBC_DISPCNT_VALUE, (void *)(REG_BASE + 0), 1);
-    
-    //memset(0x02000000, 0xff, 0x100);
-    
-    //*(vu32*)0x4000800 = 0x0D000020 | 1; // jump to bootrom overlay thing
-    
-    uint32_t hival = (3 << 5) | (2 << 7) | (1 << 9) | (0 << 10) | (0 << 12) | (1 << 15);
-    
-    REG_DMA3SAD = 0x06010000;
-    REG_DMA3DAD = 0x06000000;
-    //REG_DMA3CNT = 0x1000 | (hival << 16);
-    
-    // Normal boot, black screen with jingle
-    //*(vu32*)0x4000800 = 0x0D000000 | 0 | 2 | 4 | 0 | 0x10 | 0x20;
-    //SWI_Halt();
-
     // BIOS swapped boot, white screen  no jingle
-    //*(vu32*)0x4000800 = 0x0D000000 | 0 | 2 | 4 | 8 | 0x10 | 0x20;
-    //SWI_Halt();
+    *(vu32*)0x4000800 = 0x0D000000 | 1 | 8 | 0x20;
 
     //void (*jump_fn)(void) = (void*)0x06010000;
-    //void (*jump_fn)(void) = (void*)0x03000000;
-    //jump_fn();
-
-    //REG_IME = 1;
-
-    // VRAM sets up registers, then jumps to 0x0 (actually 0x03000000) to trigger GBC mode
-    asm volatile(
-        
-        "ldr r0, =0x06010000\n"
-        "mov lr, r0\n"
-        //"ldr r0, =0x03000010\n"
-        "bx r0"
-    );
-
-    // It seems that the GBC mode begins when HALTCNT is written.
-    
-    *(uint8_t*)0x4000301 = 0x00;
+    void (*jump_fn)(void) = (void*)((intptr_t)do_halt - 0x02000000);
+    jump_fn();
 
     // Never reached in hardware. Trap emulators.
     while (1)
     {
-        *(uint8_t*)0x4000301 = 0x00;
+        //*(uint8_t*)0x4000301 = 0x00;
         //SWI_Halt();
     }
 }
 
-IWRAM_CODE void simpleirq(void)
+void delayed_switch2gbc(void)
 {
     REG_IME = 0;
-    REG_IF = 0xFFFF;
-    REG_IME = 1;
-}
 
-IWRAM_CODE void delayed_switch2gbc(void)
-{
-    REG_IME = 0;
     /*consoleDemoInit();
     iprintf("Swap cartridges now!\n");
     iprintf("\n");
@@ -177,6 +146,7 @@ IWRAM_CODE void delayed_switch2gbc(void)
     //*(uint32_t*)0x02000004 = 0xEAFFFFFE;
     //*(uint32_t*)0x02000008 = 0xEAFFFFFE;
     //*(uint32_t*)0x0200000C = 0xEAFFFFFE;
+#if 0
 
 #if 0 
     *(uint32_t*)0x02000000 = 0x0;
@@ -345,14 +315,6 @@ IWRAM_CODE void delayed_switch2gbc(void)
 
     memcpy(out, (void*)((intptr_t)&RAM_stub & ~1), 0x100);
 
-    // Write payload to IWRAM
-    uint8_t* iwram_8 = (uint32_t*)0x03000000;
-    memset(iwram_8, 0, 0x3B*4);
-    for (int i = 0; i < 0x3B; i++)
-    {
-        iwram_8[i * 4] = gbc_payload[i];
-    }
-
     //irqEnable(IRQ_TIMER0);
 
     // Clocks per second = 16777216 = 16 * 1024 * 1024
@@ -365,8 +327,17 @@ IWRAM_CODE void delayed_switch2gbc(void)
 
     //for (int i = 0; i < 10 * 1024; i++)
     //    SWI_Halt();
-    while ((REG_KEYINPUT & (1 << 8)));
-    while (!(REG_KEYINPUT & (1 << 8)));
+    //while ((REG_KEYINPUT & (1 << 8)));
+    //while (!(REG_KEYINPUT & (1 << 8)));
+
+#endif
+    // Write payload to IWRAM
+    uint8_t* iwram_8 = (uint32_t*)0x03000000;
+    //memset(iwram_8, 0, 0x3B*4);
+    for (int i = 0; i < gbc_payload_length; i++)
+    {
+        iwram_8[i * 4] = gbc_payload[i];
+    }
 
     BG_PALETTE[0] = 0x0000;
     BG_PALETTE[1] = 0x7FFF;
@@ -395,11 +366,12 @@ IWRAM_CODE void delayed_switch2gbc(void)
     //REG_TM0CNT_L = UINT16_MAX - ticks_per_second;
     //REG_TM0CNT_H = TIMER_START | TIMER_IRQ | 3;
 
-    *(uint32_t*)0x03007FFC = 0x06010000 + (14*4);
+    //*(uint32_t*)0x03007FFC = 0x06010000 + (14*4);
 
     switch2gbc();
 }
 
+#if 0
 __attribute__((naked)) void RAM_stub(void)
 {
     asm volatile(
@@ -455,3 +427,4 @@ __attribute__((naked)) void RAM_stub(void)
         "b loop\n"
     );
 }
+#endif
