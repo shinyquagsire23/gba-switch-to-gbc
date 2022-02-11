@@ -5,7 +5,17 @@ LOAD "Main Load", VRAM[$8000]
 _start::
     xor  a
     ldh  [$FF40],a      ; Disable LCD as early as possible
+    ld   a,$80
+    ld  [$FF68],a
+    xor a
+    dec a
+    ld  [$FF69],a
+    dec a
+    ld  [$FF69],a
+    dec a
+    ld  [$FF69],a
     ld   hl,.hram_payload_start
+
     ld   c,$80          ; Bottom of HRAM
 .copyloop
     ldi  a,[hl]

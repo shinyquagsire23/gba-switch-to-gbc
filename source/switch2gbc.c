@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
 //
-// Copyright (c) 2014, 2020 Antonio Ni�o D�az (AntonioND)
+// Copyright (c) 2014, 2020 Antonio Niño Díaz (AntonioND)
 
 #include <stdio.h>
 
 #include <gba.h>
 
 #define ALWAYS_INLINE __attribute__((always_inline)) static inline
-#define REG_POSTFLG (*(vu8*)0x04000300)
+#define REG_POSTFLG (*(vu8*)0x04000400)
 #define REG_HALTCNT (*(vu8*)0x04000301)
 
 //const uint8_t gbc_payload[0x3B] = {0xAF, 0xE0, 0x40, 0x21, 0x10, 0x80, 0x0E, 0x80, 0x2A, 0xE2, 0x0C, 0x20, 0xFB, 0xC3, 0x80, 0xFF, 0x3E, 0x80, 0xE0, 0x40, 0x06, 0x0C, 0xAF, 0xE0, 0x0F, 0x3C, 0xE0, 0xFF, 0x18, 0x15, 0x05, 0x20, 0xF5, 0x3E, 0xFF, 0xE0, 0x24, 0xE0, 0x25, 0xE0, 0x26, 0x3E, 0x82, 0xE0, 0x12, 0xE0, 0x13, 0xE0, 0x14, 0x18, 0xE1, 0xF0, 0x0F, 0xE6, 0x01, 0x28, 0xFA, 0x18, 0xE3};
@@ -100,17 +100,111 @@ void prepare_registers(void)
     //*(vu32*)0x4000800 = 0x0E0000F8;
 }
 
+/*
+Never enters GBC mode
+.iwram:03004000 __iwram_start                           ; DATA XREF: LOAD:0300007C↑o
+.iwram:03004000                                         ; switch2gbc+14↓o ...
+.iwram:03004000                 MOVS    R3, #0x80       ; Alternative name is '__iwram_start'
+.iwram:03004000                                         ; do_halt
+.iwram:03004002                 MOVS    R2, #0x81
+.iwram:03004004                 LSLS    R3, R3, #0x13
+.iwram:03004006                 LSLS    R2, R2, #3
+.iwram:03004008                 STRH    R2, [R3]
+.iwram:0300400A                 NOP
+.iwram:0300400C                 NOP
+.iwram:0300400E                 MOVS    R2, #1
+.iwram:03004010                 LDR     R3, =0x4000300
+.iwram:03004012                 STRB    R2, [R3]
+.iwram:03004014                 MOVS    R2, #0
+.iwram:03004016                 LDR     R3, =0x4000301
+.iwram:03004018                 STRB    R2, [R3]
+.iwram:0300401A
+.iwram:0300401A loc_300401A                             ; CODE XREF: __iwram_start:loc_300401A↓j
+.iwram:0300401A                 B       loc_300401A
+*/
+
+/*
+Enters GBC mode
+.iwram:03004000 __iwram_start                           ; DATA XREF: LOAD:0300007C↑o
+.iwram:03004000                                         ; switch2gbc+14↓o ...
+.iwram:03004000                 MOVS    R3, #0x80       ; Alternative name is '__iwram_start'
+.iwram:03004000                                         ; do_halt
+.iwram:03004002                 MOVS    R2, #0x81
+.iwram:03004004                 LSLS    R3, R3, #0x13
+.iwram:03004006                 LSLS    R2, R2, #3
+.iwram:03004008                 STRH    R2, [R3]
+.iwram:0300400A                 NOP
+.iwram:0300400C                 NOP
+.iwram:0300400E                 NOP
+.iwram:03004010                 MOVS    R2, #1
+.iwram:03004012                 LDR     R3, =0x4000300
+.iwram:03004014                 STRB    R2, [R3]
+.iwram:03004016                 MOVS    R2, #0
+.iwram:03004018                 LDR     R3, =0x4000301
+.iwram:0300401A                 STRB    R2, [R3]
+.iwram:0300401C
+.iwram:0300401C loc_300401C                             ; CODE XREF: __iwram_start:loc_300401C↓j
+.iwram:0300401C                 B       loc_300401C
+*/
+
+#if 0
 IWRAM_CODE void do_halt(void)
 {
-    REG_DISPCNT = 0x0408;
+    REG_DISPCNT = 0x0408; // stalls forever here here (no nops)
+    __asm__("nop"); // never enters CGB mode
+    __asm__("nop"); // never enters CGB mode
+    //__asm__("nop"); // boots to CGB
+    
     REG_POSTFLG = 1;
     REG_HALTCNT = 0;
     while (1)
     {
-        //REG_DISPCNT |= 0x80;
-        //REG_DISPCNT &= ~0x80;
+        //REG_DISPCNT |= 0x08;
+        //REG_DISPCNT &= ~0x08;
+        //__asm__("nop");
     }
+
+    while (1);
 }
+#endif
+
+#if 1
+
+IWRAM_CODE void do_halt(void)
+{
+    REG_DISPCNT = 0x0408; // stalls forever here here (no nops)
+    /*__asm__("nop"); // boots to CGB
+    __asm__("nop"); // boots to CGB
+    __asm__("nop"); // boots to CGB
+    __asm__("nop"); // boots to CGB
+    __asm__("nop"); // boots to CGB
+    __asm__("nop"); // boots to CGB
+    __asm__("nop"); // stalls forever here
+    __asm__("nop"); // stalls?
+    __asm__("nop"); // boots to CGB
+    __asm__("nop"); // boots to CGB
+    __asm__("nop"); // boots to CGB
+    __asm__("nop"); // boots to CGB
+    __asm__("nop"); // boots to CGB
+    __asm__("nop"); // boots to CGB
+    __asm__("nop"); // stalls forever here*/
+    int i = 0;
+    REG_POSTFLG = 1;
+    REG_HALTCNT = 0;
+    do
+    {
+        REG_DISPCNT |= 0x8;
+        i++;
+        REG_DISPCNT &= ~0x8;
+    }
+    while (i < 0x8);
+
+    //REG_HALTCNT = 0x80;
+    //__asm__("nop"); // boots to CGB if uncommented
+
+    while (1);
+}
+#endif
 
 void switch2gbc(void)
 {
@@ -118,10 +212,12 @@ void switch2gbc(void)
     
     // BIOS swapped boot, white screen  no jingle
     *(vu32*)0x4000800 = 0x0D000000 | 1 | 8 | 0x20;
+    //do_halt();
 
     //void (*jump_fn)(void) = (void*)0x06010000;
     void (*jump_fn)(void) = (void*)((intptr_t)do_halt - 0x02000000);
     jump_fn();
+
 
     // Never reached in hardware. Trap emulators.
     while (1)
