@@ -5,9 +5,10 @@
 #include <stdio.h>
 
 #include <gba.h>
+#include <string.h>
 
 #define ALWAYS_INLINE __attribute__((always_inline)) static inline
-#define REG_POSTFLG (*(vu8*)0x04000400)
+#define REG_POSTFLG (*(vu32*)0x04000804)
 #define REG_HALTCNT (*(vu8*)0x04000301)
 
 //const uint8_t gbc_payload[0x3B] = {0xAF, 0xE0, 0x40, 0x21, 0x10, 0x80, 0x0E, 0x80, 0x2A, 0xE2, 0x0C, 0x20, 0xFB, 0xC3, 0x80, 0xFF, 0x3E, 0x80, 0xE0, 0x40, 0x06, 0x0C, 0xAF, 0xE0, 0x0F, 0x3C, 0xE0, 0xFF, 0x18, 0x15, 0x05, 0x20, 0xF5, 0x3E, 0xFF, 0xE0, 0x24, 0xE0, 0x25, 0xE0, 0x26, 0x3E, 0x82, 0xE0, 0x12, 0xE0, 0x13, 0xE0, 0x14, 0x18, 0xE1, 0xF0, 0x0F, 0xE6, 0x01, 0x28, 0xFA, 0x18, 0xE3};
@@ -189,7 +190,7 @@ IWRAM_CODE void do_halt(void)
     __asm__("nop"); // boots to CGB
     __asm__("nop"); // stalls forever here*/
     int i = 0;
-    REG_POSTFLG = 1;
+    REG_POSTFLG = 0;
     REG_HALTCNT = 0;
     do
     {
@@ -199,234 +200,104 @@ IWRAM_CODE void do_halt(void)
     }
     while (i < 0x8);
 
-    //REG_HALTCNT = 0x80;
-    //__asm__("nop"); // boots to CGB if uncommented
+    REG_DISPCNT |= 0x8;
 
-    while (1);
+    //REG_HALTCNT = 0x80;
+    __asm__("nop");
+    __asm__("nop"); // boots to CGB if uncommented
+
+    //while (1);
 }
 #endif
+
+u32 xfer32(u32 tosend) 
+{
+    //Wait for exchange to start
+    REG_SIODATA32 = tosend;
+    REG_SIOCNT &= ~((1 << 7) | (1<<3));
+    REG_SIOCNT |= (1 << 7) | (1<<3);
+    while(REG_SIOCNT & 0x80){} // wait for send
+
+    //Master sends data, we read
+    //while((REG_RCNT & 0x1) == 0){}
+    u32 ret = REG_SIODATA32; //Get data
+
+    u32 timeout = 1000;
+    while (!(REG_RCNT & 1))
+    {
+        if (!--timeout) break;
+    }
+    
+    return ret;
+}
+
+#ifdef BIOS_TESTS
+IWRAM_CODE void bios_tests(void)
+{
+    //REG_POSTFLG = 0xFFFFFFFF;
+    while (1)
+    {
+        for (int i = 0x300; i < 0x1000; i += 4)
+        {
+            xfer32(*(u32*)(0x04000000+i));
+            xfer32(0x04000000+i);
+            xfer32(0x1234ABCD);
+        }
+    }
+}
+#endif // BIOS_TESTS
 
 void switch2gbc(void)
 {
     REG_IME = 0;
+
+    //bios_idk();
     
     // BIOS swapped boot, white screen  no jingle
     *(vu32*)0x4000800 = 0x0D000000 | 1 | 8 | 0x20;
     //do_halt();
 
+#ifdef BIOS_TESTS
+    void (*jump_fn2)(void) = (void*)((intptr_t)bios_idk - 0x02000000);
+    jump_fn2();
+#endif // BIOS_TESTS
+
     //void (*jump_fn)(void) = (void*)0x06010000;
     void (*jump_fn)(void) = (void*)((intptr_t)do_halt - 0x02000000);
     jump_fn();
 
+    REG_DISPCNT |= 0x80;
 
     // Never reached in hardware. Trap emulators.
     while (1)
     {
-        //*(uint8_t*)0x4000301 = 0x00;
-        //SWI_Halt();
+        //REG_BG2HOFS += 1;
+        REG_DISPCNT |= 0x80;
+        REG_DISPCNT &= ~0x80;
+        
+        // Uncommenting these in sequence seems to change whether the loop plays and CGB doesn't enter,
+        // or if CGB is entered
+        //__asm__("nop"); // CGB
+        //__asm__("nop"); // CGB
+        //__asm__("nop"); // jittery screen
+        //__asm__("nop"); // jittery screen
+        //__asm__("nop"); // CGB
+        //__asm__("nop"); // CGB
+        //__asm__("nop"); // CGB
+        //__asm__("nop"); // CGB
+        //__asm__("nop"); // CGB
+        //__asm__("nop"); // CGB
+        //__asm__("nop"); // blank screen
+        //__asm__("nop"); // stable screen
     }
 }
 
 void delayed_switch2gbc(void)
 {
     REG_IME = 0;
+    REG_RCNT = 0;
+    REG_SIOCNT = 0x1008;
 
-    /*consoleDemoInit();
-    iprintf("Swap cartridges now!\n");
-    iprintf("\n");
-    iprintf("Waiting 10 seconds...\n");*/
-    
-    //memcpy((void*)0x02000000, cgb_agb_boot_bin, cgb_agb_boot_bin_size);
-
-//*(uint32_t*)0x02000000 = 0xEAFFFFFE;
-    //*(uint32_t*)0x02000004 = 0xEAFFFFFE;
-    //*(uint32_t*)0x02000008 = 0xEAFFFFFE;
-    //*(uint32_t*)0x0200000C = 0xEAFFFFFE;
-#if 0
-
-#if 0 
-    *(uint32_t*)0x02000000 = 0x0;
-    *(uint32_t*)0x02000004 = 0x0;
-    *(uint32_t*)0x02000008 = 0x0;
-    *(uint32_t*)0x0200000C = 0xE3A00004;
-    *(uint32_t*)0x02000010 = 0xE1A00C00;
-    *(uint32_t*)0x02000014 = 0xE2800C03;
-    
-    *(uint32_t*)0x02000018 = 0xE3A01000;
-    *(uint32_t*)0x0200001C = 0xE5C01001;
-    
-    *(uint32_t*)0x02000020 = 0xE3A00006;
-    *(uint32_t*)0x02000024 = 0xE1A00C00;
-    
-    *(uint32_t*)0x02000028 = 0xe3a01000;
-    *(uint32_t*)0x0200002C = 0xe7801001;
-    *(uint32_t*)0x02000030 = 0xe2811004;
-    *(uint32_t*)0x02000034 = 0xe3510801;
-    *(uint32_t*)0x02000038 = 0xeafffffb;
-    
-    *(uint32_t*)0x0200003C = 0xEAFFFFFE;
-#endif
-
-    uint32_t* out = (uint32_t*)0x02000000;
-
-    *out = 0; out++;
-    *out = 0; out++;
-    *out = 0x0; out++;
-    *out = 0x0; out++;
-    *out = 0x0; out++;
-    *out = 0x0; out++;
-    *out = 0x0; out++;
-    *out = 0x0; out++;
-    //*out = 0xEAFFFFFE; out++;
-    //*out = 0xe12fff1e; out++;
-    //*out = 0xe25ef004; out++;
-    *out = 0xe59F0000; out++;
-    *out = 0xe12fff10; out++;
-    *out = 0x06010000; out++;
-
-    *out = 0xe5c88001; out++;
-    *out = 0xe12fff1e; out++;
-    
-    
-#if 0
-    *(uint32_t*)0x03000000 = 0x0;
-    *(uint32_t*)0x03000004 = 0x0;
-    *(uint32_t*)0x03000008 = 0x0;
-    *(uint32_t*)0x0300000C = 0xE3A00004;
-    *(uint32_t*)0x03000010 = 0xE1A00C00;
-    *(uint32_t*)0x03000014 = 0xE2800C03;
-    
-    *(uint32_t*)0x03000018 = 0xE3A01000;
-    *(uint32_t*)0x0300001C = 0xE5C01001;
-    
-    //*(uint32_t*)0x03000020 = 0xEAFFFFF9;
-    //*(uint32_t*)0x03000020 = 0xE3A00006;
-    *(uint32_t*)0x03000024 = 0xE1A00C00;
-    
-    *(uint32_t*)0x03000028 = 0xe3a01000;
-    *(uint32_t*)0x0300002C = 0xe7801001;
-    *(uint32_t*)0x03000030 = 0xe2811004;
-    *(uint32_t*)0x03000034 = 0xe3510801;
-    *(uint32_t*)0x03000038 = 0xeafffffb;
-    
-    *(uint32_t*)0x0300003C = 0xEAFFFFFE;
-#endif
-
-    out = (uint32_t*)0x03000000;
-
-    
-
-    //memcpy(out, (void*)((intptr_t)&RAM_stub & ~1), 0x80);
-
-#if 0
-    *out = 0x0; out++;
-    *out = 0x0; out++;
-    *out = 0x0; out++;
-    *out = 0x0; out++;
-    *out = 0xe59F0000; out++;
-    *out = 0xe12fff10; out++;
-    *out = 0x06010000; out++;
-#endif
-
-    *out = 0; out++;
-    *out = 0; out++;
-    *out = 0x0; out++;
-    *out = 0x0; out++;
-    *out = 0x0; out++;
-    *out = 0x0; out++;
-    *out = 0x0; out++;
-    *out = 0x0; out++;
-    //*out = 0xEAFFFFFE; out++;
-    //*out = 0xe12fff1e; out++;
-    //*out = 0xe25ef004; out++;
-    *out = 0xe59F0000; out++;
-    *out = 0xe12fff10; out++;
-    *out = 0x06010000; out++;
-
-
-    out = (uint32_t*)0x03000100;
-    *out = 0xe59f200c; out++;
-    *out = 0xe59f300c; out++;
-    *out = 0xe5823000; out++;
-    *out = 0xe5c88001; out++;
-    *out = 0xe12fff1e; out++;
-    *out = 0x04000800; out++;
-    *out = 0xffffffdf; out++;
-    
-#if 0
-    *out = 0xFF00FF00; out++;
-    *out = 0x0; out++;
-    *out = 0x0; out++;
-    *out = 0x0; out++;
-
-    *out = 0xe3a00406; out++;
-    *out = 0xe3a01000; out++;
-    *out = 0xe3a03301; out++;
-    *out = 0xe2833c03; out++;
-    *out = 0xe7801001; out++;
-    //*out = 0x0; out++;
-    *out = 0xe2811004; out++;
-    *out = 0xe3510801; out++;
-    *out = 0x1a000000; out++;
-    *out = 0xe3a01000; out++;
-    *out = 0xe5c33001; out++;
-    *out = 0xeafffff8; out++;
-#endif
-
-    out = (uint32_t*)0x02020000;
-
-    
-
-    //memcpy(out, (void*)((intptr_t)&RAM_stub & ~1), 0x80);
-
-#if 1
-    *out = 0x0; out++;
-    *out = 0x0; out++;
-    *out = 0x0; out++;
-    *out = 0x0; out++;
-    *out = 0xe59F0000; out++;
-    *out = 0xe12fff10; out++;
-    *out = 0x06010000; out++;
-#endif
-
-    out = (uint32_t*)0x06010000;
-
-    //*out = 0xFF00FF00; out++;
-    //*out = 0x0; out++;
-    //*out = 0x0; out++;
-    //*out = 0x0; out++;
-    
-    /**out = 0xe3a00406; out++;
-    *out = 0xe3a01000; out++;
-    *out = 0xe3a03301; out++;
-    *out = 0xe2833c03; out++;
-    //*out = 0xe7801001; out++;
-    *out = 0x0; out++;
-    *out = 0xe2811004; out++;
-    *out = 0xe3510801; out++;
-    *out = 0x1a000000; out++;
-    *out = 0xe3a01000; out++;
-    *out = 0xe5c33001; out++;
-    *out = 0xeafffff8; out++;*/
-
-    memcpy(out, (void*)((intptr_t)&RAM_stub & ~1), 0x100);
-
-    //irqEnable(IRQ_TIMER0);
-
-    // Clocks per second = 16777216 = 16 * 1024 * 1024
-    // With 1024 prescaler = 16 * 1024 for one second
-
-    uint16_t ticks_per_second = 16 * 1024 * 10;
-
-    //REG_TM0CNT_L = UINT16_MAX - ticks_per_second;
-    //REG_TM0CNT_H = TIMER_START | TIMER_IRQ | 3;
-
-    //for (int i = 0; i < 10 * 1024; i++)
-    //    SWI_Halt();
-    //while ((REG_KEYINPUT & (1 << 8)));
-    //while (!(REG_KEYINPUT & (1 << 8)));
-
-#endif
     // Write payload to IWRAM
     uint8_t* iwram_8 = (uint32_t*)0x03000000;
     //memset(iwram_8, 0, 0x3B*4);
@@ -434,6 +305,8 @@ void delayed_switch2gbc(void)
     {
         iwram_8[i * 4] = gbc_payload[i];
     }
+
+    memset(VRAM, 0xCF, 0xC000);
 
     BG_PALETTE[0] = 0x0000;
     BG_PALETTE[1] = 0x7FFF;

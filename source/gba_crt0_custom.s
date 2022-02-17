@@ -123,8 +123,7 @@ SkipEWRAMClear:					@ Clear Internal WRAM to 0x00
 	orr r0, r1, r0
 	strh r0, [r2, #0x0]
 
-	mov	r2, #6
-	lsl	r2, r2, #24			@ r2= 0x06000000
+	ldr r2, =__text_start
 	ldr	r3, =__end__			@ last ewram address
 	ldr r1, =__text_start
 	sub	r3, r1				@ r3= actual binary size

@@ -5,15 +5,21 @@ LOAD "Main Load", VRAM[$8000]
 _start::
     xor  a
     ldh  [$FF40],a      ; Disable LCD as early as possible
+    
+    ldh  a,[$ff4c]
+    and  a,$04
+.stop:
+    jr   nz, .stop
+
     ld   a,$80
     ld  [$FF68],a
     xor a
     dec a
     ld  [$FF69],a
     dec a
-    ld  [$FF69],a
+    ;ld  [$FF69],a
     dec a
-    ld  [$FF69],a
+    ;ld  [$FF69],a
     ld   hl,.hram_payload_start
 
     ld   c,$80          ; Bottom of HRAM
@@ -23,12 +29,31 @@ _start::
     inc  c
     jr   nz,.copyloop
     jp   $FF80
-.hram_payload_start
+
+.hram_payload_start:
+    nop
+    ld a,$4
+    ldh [$ff4c],a
+    ld   a,$81       
+    ldh  [$FF71],a      ; PSM
+    ld   a,$10       
+    ldh  [$FF74],a      ; PSW
+    ld a,$1
+    ldh [$ff50],a
+
     ld   a,$80       
     ldh  [$FF40],a      ; Enable LCD
 .restart
     ld   b,$0C
 .nextframe
+    ld a, $80
+    ld [$ff68], a
+    
+    LD HL, $FFFE
+    INC [HL]
+    LD A, [HL]
+    LD [$ff69], A
+
     xor  a
     ldh  [$FF0F],a      ; Clear interrupts
     inc  a
