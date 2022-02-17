@@ -277,18 +277,34 @@ void switch2gbc(void)
         
         // Uncommenting these in sequence seems to change whether the loop plays and CGB doesn't enter,
         // or if CGB is entered
-        //__asm__("nop"); // CGB
-        //__asm__("nop"); // CGB
-        //__asm__("nop"); // jittery screen
-        //__asm__("nop"); // jittery screen
-        //__asm__("nop"); // CGB
-        //__asm__("nop"); // CGB
-        //__asm__("nop"); // CGB
-        //__asm__("nop"); // CGB
-        //__asm__("nop"); // CGB
-        //__asm__("nop"); // CGB
-        //__asm__("nop"); // blank screen
-        //__asm__("nop"); // stable screen
+        __asm__("nop"); // CGB
+        __asm__("nop"); // CGB
+        __asm__("nop"); // jittery screen
+        __asm__("nop"); // jittery screen
+        __asm__("nop"); // CGB
+        __asm__("nop"); // CGB
+        __asm__("nop"); // CGB
+        __asm__("nop"); // CGB
+        __asm__("nop"); // CGB
+        __asm__("nop"); // CGB
+        __asm__("nop"); // blank screen
+        __asm__("nop"); // stable screen
+        __asm__("nop"); // CGB
+        __asm__("nop"); // CGB
+        __asm__("nop"); // CGB
+        __asm__("nop"); // CGB
+        __asm__("nop"); // CGB
+        __asm__("nop"); // CGB
+        __asm__("nop"); // stable screen
+        __asm__("nop"); // stable screen
+        __asm__("nop"); // CGB
+        __asm__("nop"); // CGB
+        __asm__("nop"); // CGB
+        __asm__("nop"); // CGB
+        __asm__("nop"); // CGB
+        __asm__("nop"); // CGB
+        __asm__("nop"); // blank screen
+        __asm__("nop"); // jitters
     }
 }
 
